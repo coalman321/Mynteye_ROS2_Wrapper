@@ -11,41 +11,40 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+#include <cv_bridge/cv_bridge.h>
+#include <mynteyed/camera.h>
+#include <mynteyed/utils.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/static_transform_broadcaster.h>
+#include <unistd.h>
+
+#include <chrono>
+#include <image_transport/image_transport.hpp>
+#include <iomanip>
+#include <memory>
+#include <mynteye_wrapper_d/srv/get_params.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/opencv.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <cv_bridge/cv_bridge.h>
-#include <image_transport/image_transport.h>
-#include <tf2_ros/static_transform_broadcaster.h>
-#include <tf2/LinearMath/Quaternion.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-
-#include <boost/make_shared.hpp>
-#include <boost/thread/thread.hpp>
-#include <chrono>
-#include <iomanip>
-#include <string>
-#include <vector>
-#include <unistd.h>
-
 #include <sensor_msgs/image_encodings.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/temperature.hpp>
-#include <mynteye_wrapper_d/srv/get_params.hpp>
+#include <string>
+#include <vector>
 #include <visualization_msgs/msg/marker.hpp>
 
-#include <mynteyed/camera.h>
-#include <mynteyed/utils.h>
-#include "pointcloud_generator.h"
+#include "mynteye_wrapper_d/pointcloud_generator.hpp"
 
 #define CONFIGURU_IMPLEMENTATION 1
-#include "configuru.hpp"
+#include "mynteye_wrapper_d/configuru.hpp"
 using namespace configuru;
 
 #define WITH_OPENCV
 
-namespace MYNTEYE_NAMESPACE {
+namespace mynteyed {
 
 namespace {
 
@@ -75,7 +74,7 @@ void matrix_3x3(const double (*src1)[3], const double (*src2)[3],
 
 namespace enc = sensor_msgs::image_encodings;
 
-class MYNTEYEWrapperNodelet : public rclcpp::Node {
+class MYNTEYEWrapper : public rclcpp::Node {
  public:
     int skip_tag;
     int skip_tmp_left_tag;
@@ -101,9 +100,9 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
     rclcpp::Service<mynteye_wrapper_d::srv::GetParams>::SharedPtr
         get_params_service_;
 
-    sensor_msgs::msg::CameraInfo::ConstPtr left_info_ptr;
-    sensor_msgs::msg::CameraInfo::ConstPtr right_info_ptr;
-    sensor_msgs::msg::CameraInfo::ConstPtr depth_info_ptr;
+    sensor_msgs::msg::CameraInfo::SharedPtr left_info_ptr;
+    sensor_msgs::msg::CameraInfo::SharedPtr right_info_ptr;
+    sensor_msgs::msg::CameraInfo::SharedPtr depth_info_ptr;
 
     // Launch params
 
@@ -161,7 +160,7 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
 
     rclcpp::TimerBase::SharedPtr pub_timer;
 
-    MYNTEYEWrapperNodelet() : Node("mynteye_wrapper_d") {
+    MYNTEYEWrapper() : Node("mynteye_wrapper_d") {
         skip_tag = -1;
         skip_tmp_left_tag = 0;
         skip_tmp_right_tag = 0;
@@ -170,67 +169,91 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
 
         std::string dashes(30, '-');
 
-        // Launch params
-        int dev_index = 0;
-        int framerate = 10;
-        int ros_output_framerate = -1;
-        int dev_mode = 2;
-        int color_mode = 0;
-        int depth_mode = 0;
-        int stream_mode = 0;
-        int color_stream_format = 0;
-        int depth_stream_format = 0;
-        bool state_ae = true;
-        bool state_awb = true;
-        int ir_intensity = 0;
-        bool ir_depth_only = true;
+        // mode set parameters
+        this->declare_parameter<int>("dev_index", 0);
+        this->declare_parameter<int>("framerate", 10);
+        this->declare_parameter<int>("ros_output_framerate", -1);
+        this->declare_parameter<int>("dev_mode", 2);
+        this->declare_parameter<int>("color_mode", 0);
+        this->declare_parameter<int>("depth_mode", 0);
+        this->declare_parameter<int>("stream_mode", 0);
+        this->declare_parameter<int>("color_stream_format", 0);
+        this->declare_parameter<int>("depth_stream_format", 0);
+        this->declare_parameter<int>("ir_intensity", 0);
+        this->declare_parameter<bool>("state_ae", true);
+        this->declare_parameter<bool>("state_awb", true);
+        this->declare_parameter<bool>("ir_depth_only", true);
 
-        nh_ns.getParamCached("dev_index", dev_index);
-        nh_ns.getParamCached("framerate", framerate);
-        nh_ns.getParamCached("ros_output_framerate", ros_output_framerate);
-        nh_ns.getParamCached("dev_mode", dev_mode);
-        nh_ns.getParamCached("color_mode", color_mode);
-        nh_ns.getParamCached("depth_mode", depth_mode);
-        nh_ns.getParamCached("stream_mode", stream_mode);
-        nh_ns.getParamCached("color_stream_format", color_stream_format);
-        nh_ns.getParamCached("depth_stream_format", depth_stream_format);
-        nh_ns.getParamCached("state_ae", state_ae);
-        nh_ns.getParamCached("state_awb", state_awb);
-        nh_ns.getParamCached("ir_intensity", ir_intensity);
-        nh_ns.getParamCached("ir_depth_only", ir_depth_only);
-        nh_ns.getParamCached("depth_type", depth_type);
-        nh_ns.getParamCached("imu_timestamp_align", imu_timestamp_align);
+        int dev_index = this->get_parameter("dev_index").get_value<int>();
+        int framerate = this->get_parameter("framerate").get_value<int>();
+        int ros_output_framerate =
+            this->get_parameter("ros_output_framerate").get_value<int>();
+        int dev_mode = this->get_parameter("dev_mode").get_value<int>();
+        int color_mode = this->get_parameter("color_mode").get_value<int>();
+        int depth_mode = this->get_parameter("depth_mode").get_value<int>();
+        int stream_mode = this->get_parameter("stream_mode").get_value<int>();
+        int color_stream_format =
+            this->get_parameter("color_stream_format").get_value<int>();
+        int depth_stream_format =
+            this->get_parameter("depth_stream_format").get_value<int>();
+        int ir_intensity = this->get_parameter("ir_intensity").get_value<int>();
+        bool state_ae = this->get_parameter("state_ae").get_value<bool>();
+        bool state_awb = this->get_parameter("state_awb").get_value<bool>();
+        bool ir_depth_only =
+            this->get_parameter("ir_depth_only").get_value<bool>();
 
-        points_frequency = DEFAULT_POINTS_FREQUENCE;
-        points_factor = DEFAULT_POINTS_FACTOR;
-        gravity = 9.8;
+        // transform parameters
+        this->declare_parameter<double>("points_frequency",
+                                        DEFAULT_POINTS_FREQUENCE);
+        this->declare_parameter<double>("points_factor", DEFAULT_POINTS_FACTOR);
+        this->declare_parameter<double>("gravity", 9.8);
+        this->declare_parameter<std::string>("base_frame", "mynteye_link");
+        this->declare_parameter<std::string>("left_mono_frame",
+                                             "mynteye_left_mono_frame");
+        this->declare_parameter<std::string>("left_color_frame",
+                                             "mynteye_left_color_frame");
+        this->declare_parameter<std::string>("right_mono_frame",
+                                             "mynteye_right_mono_frame");
+        this->declare_parameter<std::string>("right_color_frame",
+                                             "mynteye_right_color_frame");
+        this->declare_parameter<std::string>("depth_frame",
+                                             "mynteye_depth_frame");
+        this->declare_parameter<std::string>("points_frame",
+                                             "mynteye_points_frame");
+        this->declare_parameter<std::string>("imu_frame", "mynteye_imu_frame");
+        this->declare_parameter<std::string>("temp_frame",
+                                             "mynteye_temp_frame");
+        this->declare_parameter<std::string>("imu_frame_processed",
+                                             "mynteye_imu_frame_processed");
+
+        points_frequency =
+            this->get_parameter("points_frequency").get_value<double>();
+        points_factor =
+            this->get_parameter("points_factor").get_value<double>();
+        gravity = this->get_parameter("gravity").get_value<double>();
         if (ros_output_framerate > 0 && ros_output_framerate < 7) {
             skip_tag = ros_output_framerate;
         }
-        nh_ns.getParamCached("points_frequency", points_frequency);
-        nh_ns.getParamCached("points_factor", points_factor);
-        nh_ns.getParamCached("gravity", gravity);
-
-        base_frame_id = "mynteye_link";
-        left_mono_frame_id = "mynteye_left_mono_frame";
-        left_color_frame_id = "mynteye_left_color_frame";
-        right_mono_frame_id = "mynteye_right_mono_frame";
-        right_color_frame_id = "mynteye_right_color_frame";
-        depth_frame_id = "mynteye_depth_frame";
-        points_frame_id = "mynteye_points_frame";
-        imu_frame_id = "mynteye_imu_frame";
-        temp_frame_id = "mynteye_temp_frame";
-        imu_frame_processed_id = "mynteye_imu_frame_processed";
-        nh_ns.getParamCached("base_frame_id", base_frame_id);
-        nh_ns.getParamCached("left_mono_frame", left_mono_frame_id);
-        nh_ns.getParamCached("left_color_frame", left_color_frame_id);
-        nh_ns.getParamCached("right_mono_frame", right_mono_frame_id);
-        nh_ns.getParamCached("right_color_frame", right_color_frame_id);
-        nh_ns.getParamCached("depth_frame", depth_frame_id);
-        nh_ns.getParamCached("points_frame", points_frame_id);
-        nh_ns.getParamCached("imu_frame", imu_frame_id);
-        nh_ns.getParamCached("temp_frame", temp_frame_id);
-        nh_ns.getParamCached("imu_frame_processed", imu_frame_processed_id);
+        base_frame_id =
+            this->get_parameter("base_frame").get_value<std::string>();
+        left_mono_frame_id =
+            this->get_parameter("left_mono_frame").get_value<std::string>();
+        left_color_frame_id =
+            this->get_parameter("left_color_frame").get_value<std::string>();
+        right_mono_frame_id =
+            this->get_parameter("right_mono_frame").get_value<std::string>();
+        right_color_frame_id =
+            this->get_parameter("right_color_frame").get_value<std::string>();
+        depth_frame_id =
+            this->get_parameter("depth_frame").get_value<std::string>();
+        points_frame_id =
+            this->get_parameter("points_frame").get_value<std::string>();
+        imu_frame_id =
+            this->get_parameter("imu_frame").get_value<std::string>();
+        temp_frame_id =
+            this->get_parameter("temp_frame").get_value<std::string>();
+        imu_frame_processed_id =
+            this->get_parameter("imu_frame_processed").get_value<std::string>();
 
         RCLCPP_INFO_STREAM(this->get_logger(), "base_frame: " << base_frame_id);
         RCLCPP_INFO_STREAM(this->get_logger(),
@@ -250,24 +273,40 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "imu_frame_processed: " << imu_frame_processed_id);
 
-        std::string left_mono_topic = "mynteye/left/image_mono";
-        std::string left_color_topic = "mynteye/left/image_color";
-        std::string right_mono_topic = "mynteye/right/image_mono";
-        std::string right_color_topic = "mynteye/right/image_color";
-        std::string depth_topic = "mynteye/depth";
-        std::string points_topic = "mynteye/points";
-        std::string imu_topic = "mynteye/imu";
-        std::string temp_topic = "mynteye/temp";
-        std::string imu_processed_topic = "mynteye/imu_processed";
-        nh_ns.getParamCached("left_mono_topic", left_mono_topic);
-        nh_ns.getParamCached("left_color_topic", left_color_topic);
-        nh_ns.getParamCached("right_mono_topic", right_mono_topic);
-        nh_ns.getParamCached("right_color_topic", right_color_topic);
-        nh_ns.getParamCached("depth_topic", depth_topic);
-        nh_ns.getParamCached("points_topic", points_topic);
-        nh_ns.getParamCached("imu_topic", imu_topic);
-        nh_ns.getParamCached("temp_topic", temp_topic);
-        nh_ns.getParamCached("imu_processed_topic", imu_processed_topic);
+        // topics
+        this->declare_parameter<std::string>("left_mono_topic",
+                                             "mynteye/left/image_mono");
+        this->declare_parameter<std::string>("left_color_topic",
+                                             "mynteye/left/image_color");
+        this->declare_parameter<std::string>("right_mono_topic",
+                                             "mynteye/right/image_mono");
+        this->declare_parameter<std::string>("right_color_topic",
+                                             "mynteye/right/image_color");
+        this->declare_parameter<std::string>("depth_topic", "mynteye/depth");
+        this->declare_parameter<std::string>("points_topic", "mynteye/points");
+        this->declare_parameter<std::string>("imu_topic", "mynteye/imu");
+        this->declare_parameter<std::string>("temp_topic", "mynteye/temp");
+        this->declare_parameter<std::string>("imu_processed_topic",
+                                             "mynteye/imu_processed");
+
+        std::string left_mono_topic =
+            this->get_parameter("left_mono_topic").get_value<std::string>();
+        std::string left_color_topic =
+            this->get_parameter("left_color_topic").get_value<std::string>();
+        std::string right_mono_topic =
+            this->get_parameter("right_mono_topic").get_value<std::string>();
+        std::string right_color_topic =
+            this->get_parameter("right_color_topic").get_value<std::string>();
+        std::string depth_topic =
+            this->get_parameter("depth_topic").get_value<std::string>();
+        std::string points_topic =
+            this->get_parameter("points_topic").get_value<std::string>();
+        std::string imu_topic =
+            this->get_parameter("imu_topic").get_value<std::string>();
+        std::string temp_topic =
+            this->get_parameter("temp_topic").get_value<std::string>();
+        std::string imu_processed_topic =
+            this->get_parameter("imu_processed_topic").get_value<std::string>();
 
         // MYNTEYE objects
         std::vector<DeviceInfo> dev_infos;
@@ -281,14 +320,14 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
                 return;
             }
 
-            RCLCPP_INFO_STREAM(this->get_logger(), dashes);
-            RCLCPP_INFO_STREAM(this->get_logger(), "Device Information");
-            RCLCPP_INFO_STREAM(this->get_logger(), dashes);
+            RCLCPP_INFO(this->get_logger(), dashes.c_str());
+            RCLCPP_INFO(this->get_logger(), "Device Information");
+            RCLCPP_INFO(this->get_logger(), dashes.c_str());
             for (auto&& info : dev_infos) {
                 RCLCPP_INFO_STREAM(this->get_logger(),
                                    info.index << " | " << info);
             }
-            RCLCPP_INFO_STREAM(this->get_logger(), dashes);
+            RCLCPP_INFO(this->get_logger(), dashes.c_str());
 
             params.dev_index = dev_index;
         }
@@ -298,43 +337,47 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
             std::vector<StreamInfo> depth_infos;
             mynteye->GetStreamInfos(dev_index, &color_infos, &depth_infos);
 
-            RCLCPP_INFO_STREAM(this->get_logger(), "Color Stream Information");
-            RCLCPP_INFO_STREAM(this->get_logger(), dashes);
+            RCLCPP_INFO(this->get_logger(), "Color Stream Information");
+            RCLCPP_INFO(this->get_logger(), dashes.c_str());
             for (auto&& info : color_infos) {
                 RCLCPP_INFO_STREAM(this->get_logger(),
                                    info.index << " | " << info);
             }
-            RCLCPP_INFO_STREAM(this->get_logger(), dashes);
+            RCLCPP_INFO(this->get_logger(), dashes.c_str());
 
-            RCLCPP_INFO_STREAM(this->get_logger(), "Depth Stream Information");
-            RCLCPP_INFO_STREAM(this->get_logger(), dashes);
+            RCLCPP_INFO(this->get_logger(), "Depth Stream Information");
+            RCLCPP_INFO(this->get_logger(), dashes.c_str());
             for (auto&& info : depth_infos) {
                 RCLCPP_INFO_STREAM(this->get_logger(),
                                    info.index << " | " << info);
             }
-            RCLCPP_INFO_STREAM(this->get_logger(), dashes);
+            RCLCPP_INFO(this->get_logger(), dashes.c_str());
         }
 
         pub_mesh_ = this->create_publisher<visualization_msgs::msg::Marker>(
             "camera_mesh", rclcpp::SystemDefaultsQoS());
         // where to get the mesh from
-        std::string mesh_file;
-        if (nh_ns.getParamCached("mesh_file", mesh_file)) {
+        this->declare_parameter<std::string>("mesh_file", "");
+        std::string mesh_file =
+            this->get_parameter("mesh_file").get_value<std::string>();
+        ;
+        if (!mesh_file.empty()) {
             mesh_msg_.mesh_resource =
                 "package://mynteye_wrapper_d/mesh/" + mesh_file;
         } else {
-            RCLCPP_INFO_STREAM(
+            RCLCPP_INFO(
                 this->get_logger(),
                 "no mesh found for visualisation, set ros param mesh_file, if "
                 "desired");
             mesh_msg_.mesh_resource = "";
         }
 
-        const std::string DEVICE_PARAMS_SERVICE = "get_params";
-        get_params_service_ = nh_ns.advertiseService(
-            DEVICE_PARAMS_SERVICE, &MYNTEYEWrapperNodelet::getParams, this);
-        RCLCPP_INFO_STREAM(this->get_logger(),
-                           "Advertized service " << DEVICE_PARAMS_SERVICE);
+        get_params_service_ =
+            this->create_service<mynteye_wrapper_d::srv::GetParams>(
+                "get_params",
+                std::bind(&MYNTEYEWrapper::getParams, this,
+                          std::placeholders::_1, std::placeholders::_2));
+        RCLCPP_INFO(this->get_logger(), "Advertized service get_params");
 
         params.framerate = framerate;
         params.dev_mode = static_cast<DeviceMode>(dev_mode);
@@ -398,8 +441,8 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
 
         // loop
         pub_timer = this->create_wall_timer(
-            std::chrono::seconds((int)(1000.0 / framerate)),
-            std::bind(&MYNTEYEWrapperNodelet::timerCallback, this));
+            std::chrono::milliseconds((int)(1000.0 / framerate)),
+            std::bind(&MYNTEYEWrapper::timerCallback, this));
     }
 
     void timerCallback() {
@@ -407,7 +450,7 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
         detectSubscribers();
     }
 
-    ~MYNTEYEWrapperNodelet() {
+    ~MYNTEYEWrapper() {
         closeDevice();
         mynteye.reset(nullptr);
         motion_intrinsics = nullptr;
@@ -423,7 +466,8 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
         bool points_sub = pub_points->get_subscription_count() > 0;
         bool imu_sub = pub_imu->get_subscription_count() > 0;
         bool temp_sub = pub_temp->get_subscription_count() > 0;
-        bool imu_processed_sub = pub_imu_processed->get_subscription_count() > 0;
+        bool imu_processed_sub =
+            pub_imu_processed->get_subscription_count() > 0;
 
         bool left_sub = left_mono_sub || left_color_sub;
         bool right_sub = right_mono_sub || right_color_sub;
@@ -578,7 +622,8 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
         if (in_ok) {
             RCLCPP_ERROR(this->get_logger(), "Camera info is created");
         } else {
-            RCLCPP_ERROR(this->get_logger(), "Camera info is null, use default parameters.");
+            RCLCPP_ERROR(this->get_logger(),
+                         "Camera info is null, use default parameters.");
         }
         left_info_ptr = createCameraInfo(in.left);
         right_info_ptr = createCameraInfo(in.right);
@@ -605,7 +650,7 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
                 msg.header.frame_id = points_frame_id;
                 pub_points->publish(msg);
             },
-            points_factor, points_frequency));
+            this, points_factor, points_frequency));
     }
 
     void closeDevice() {
@@ -645,13 +690,12 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
     }
 
     void publishColor(const StreamData& data, const rclcpp::Time& timestamp,
-                      const sensor_msgs::msg::CameraInfo::ConstPtr& info,
+                      const sensor_msgs::msg::CameraInfo::SharedPtr& info,
                       const image_transport::CameraPublisher& pub_color,
                       bool color_sub, const std::string color_frame_id,
                       const image_transport::Publisher& pub_mono, bool mono_sub,
                       const std::string mono_frame_id, bool is_left) {
-
-        auto&& mat = data.img->To(ImageFormat::COLOR_BGR)->toMat();
+        auto&& mat = data.img->To(ImageFormat::COLOR_BGR)->ToMat();
 
         if (color_sub) {
             std_msgs::msg::Header header;
@@ -661,8 +705,7 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
             auto&& msg =
                 cv_bridge::CvImage(header, enc::BGR8, mat).toImageMsg();
             if (info) {
-                info->header.stamp = msg->header.stamp;
-                info->header.frame_id = color_frame_id;
+                info->header = header;
             }
             pub_color.publish(msg, info);
         }
@@ -695,9 +738,7 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
 
         auto&& info = depth_info_ptr;
         if (info)
-            info->header.stamp = header.stamp;
-        if (info)
-            info->header.frame_id = depth_frame_id;
+            info->header = header;
         auto&& mat = data.img->To(ImageFormat::DEPTH_RAW)->ToMat();
         if (depth_type == 0) {
             pub_depth.publish(
@@ -815,15 +856,16 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
             auto data_gyr1 = ProcImuTempDrift(*imu_gyro);
             auto data_acc2 = ProcImuAssembly(data_acc1);
             auto data_gyr2 = ProcImuAssembly(data_gyr1);
-            auto msg = getImuMsgFromData(
-                this->get_clock()->now(), imu_frame_processed_id, data_acc2, data_gyr2);
+            auto msg =
+                getImuMsgFromData(this->get_clock()->now(),
+                                  imu_frame_processed_id, data_acc2, data_gyr2);
             msg.header.stamp = stamp;
             pub_imu_processed->publish(msg);
         }
 
         if (temp_sub) {
-            auto msg =
-                getTempMsgFromData(this->get_clock()->now(), temp_frame_id, *imu_accel);
+            auto msg = getTempMsgFromData(this->get_clock()->now(),
+                                          temp_frame_id, *imu_accel);
             msg.header.stamp = stamp;
             pub_temp->publish(msg);
         }
@@ -859,8 +901,8 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
         }
 
         if (temp_sub) {
-            auto msg =
-                getTempMsgFromData(this->get_clock()->now(), temp_frame_id, *imu_accel);
+            auto msg = getTempMsgFromData(this->get_clock()->now(),
+                                          temp_frame_id, *imu_accel);
             msg.header.stamp = stamp;
             pub_temp->publish(msg);
         }
@@ -916,9 +958,9 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
         return msg;
     }
 
-    sensor_msgs::msg::Temperature getTempMsgFromData(rclcpp::Time stamp,
-                                               const std::string& frame_id,
-                                               const ImuData& imu_accel) {
+    sensor_msgs::msg::Temperature getTempMsgFromData(
+        rclcpp::Time stamp, const std::string& frame_id,
+        const ImuData& imu_accel) {
         sensor_msgs::msg::Temperature msg;
         msg.header.stamp = stamp;
         msg.header.frame_id = frame_id;
@@ -926,13 +968,13 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
         return msg;
     }
 
-    sensor_msgs::msg::CameraInfo::ConstPtr createCameraInfo(
+    sensor_msgs::msg::CameraInfo::SharedPtr createCameraInfo(
         const CameraIntrinsics& in) {
         // http://docs.ros.org/kinetic/api/sensor_msgs/html/msg/CameraInfo.html
         sensor_msgs::msg::CameraInfo* camera_info =
             new sensor_msgs::msg::CameraInfo();
         auto camera_info_ptr =
-            sensor_msgs::msg::CameraInfo::ConstPtr(camera_info);
+            sensor_msgs::msg::CameraInfo::SharedPtr(camera_info);
 
         camera_info->width = in.width;
         camera_info->height = in.height;
@@ -1149,11 +1191,10 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
             pub_mesh_->publish(mesh_msg_);  // publish stamped mesh
     }
 
-    bool getParams(
-        const std::shared_ptr<mynteye_wrapper_d::srv::GetParams::Request>
-            req,  // NOLINT
-        std::shared_ptr<mynteye_wrapper_d::srv::GetParams::Response>
-            res) {  // NOLINT
+    void getParams(
+        const mynteye_wrapper_d::srv::GetParams::Request::SharedPtr
+            req,                                                       // NOLINT
+        mynteye_wrapper_d::srv::GetParams::Response::SharedPtr res) {  // NOLINT
         using Request = mynteye_wrapper_d::srv::GetParams::Request;
         bool in_ok_1, in_ok_2;
         // left_info_ptr
@@ -1459,8 +1500,15 @@ class MYNTEYEWrapperNodelet : public rclcpp::Node {
                 res->value = "null";
                 break;
         }
-        return true;
+        return;
     }
 };
 
-}  // namespace MYNTEYE_NAMESPACE
+}  // namespace mynteyed
+
+int main(int argc, char* argv[]) {
+    rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<mynteyed::MYNTEYEWrapper>());
+    rclcpp::shutdown();
+    return 0;
+}

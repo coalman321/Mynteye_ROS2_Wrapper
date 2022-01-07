@@ -19,62 +19,60 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <thread>
-#include <rclcpp/rclcpp.hpp>
-
 #include <opencv2/core/core.hpp>
-
+#include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
+#include <thread>
 
-#include "mynteyed/util/rate.h"
 #include "mynteyed/stubs/types_calib.h"
 
-MYNTEYE_BEGIN_NAMESPACE
+namespace mynteyed {
 
 #define DEFAULT_POINTS_FREQUENCE (0)
 #define DEFAULT_POINTS_FACTOR (1000.0)
 
 class PointCloudGenerator {
  public:
-  using Callback = std::function<void(sensor_msgs::msg::PointCloud2)>;
+    using Callback = std::function<void(sensor_msgs::msg::PointCloud2)>;
 
-  PointCloudGenerator(CameraIntrinsics in, Callback callback,
-      double factor = DEFAULT_POINTS_FACTOR,
-      std::int32_t frequency = DEFAULT_POINTS_FREQUENCE);
-  ~PointCloudGenerator();
+    PointCloudGenerator(CameraIntrinsics in, Callback callback,
+                        rclcpp::Node* nodeptr,
+                        double factor = DEFAULT_POINTS_FACTOR,
+                        std::int32_t frequency = DEFAULT_POINTS_FREQUENCE);
+    ~PointCloudGenerator();
 
-  bool Push(const cv::Mat& color, const cv::Mat& depth, rclcpp::Time stamp);
+    bool Push(const cv::Mat& color, const cv::Mat& depth, rclcpp::Time stamp);
 
-  double factor() { return factor_; }
-  void set_factor(double factor) { factor_ = factor; }
+    double factor() { return factor_; }
+    void set_factor(double factor) { factor_ = factor; }
 
  private:
-  void Start();
-  void Stop();
+    void Start();
+    void Stop();
 
-  void Run();
+    void Run();
 
-  CameraIntrinsics in_;
-  Callback callback_;
+    CameraIntrinsics in_;
+    Callback callback_;
 
-  std::unique_ptr<MYNTEYE_NAMESPACE::Rate> rate_;
+    rclcpp::TimerBase::SharedPtr timer;
 
-  std::mutex mutex_;
-  std::condition_variable condition_;
+    std::mutex mutex_;
+    std::condition_variable condition_;
 
-  bool running_;
-  std::thread thread_;
+    bool running_;
+    std::thread thread_;
 
-  cv::Mat color_;
-  cv::Mat depth_;
-  rclcpp::Time stamp_;
+    cv::Mat color_;
+    cv::Mat depth_;
+    rclcpp::Time stamp_;
 
-  double factor_;
+    double factor_;
 
-  bool generating_;
+    bool generating_;
 };
 
-MYNTEYE_END_NAMESPACE
+}  // namespace mynteyed
 
 #endif  // MYNTEYE_WRAPPER_POINTCLOUD_GENERATOR_H_

@@ -29,7 +29,8 @@ find_package(OpenCV 4 REQUIRED
 )
 
 # targets
-add_executable(mynteye_wrapper_d_node src/mynteye_wrapper_node.cc)
+add_executable(mynteye_wrapper_d_node src/mynteye_wrapper_node.cc src/pointcloud_generator.cc)
+target_compile_definitions(mynteye_wrapper_d_node PUBLIC -DWITH_OPENCV)
 target_include_directories(mynteye_wrapper_d_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
@@ -53,16 +54,16 @@ target_include_directories(mynteye_listener_d PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(mynteye_listener_d PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(mynteye_listener_d 
-mynteyed
-sensor_msgs
-std_msgs
-tf2
-tf2_ros
-rclcpp
-image_transport
-cv_bridge
-OpenCV
-visualization_msgs
+  mynteyed
+  sensor_msgs
+  std_msgs
+  tf2
+  tf2_ros
+  rclcpp
+  image_transport
+  cv_bridge
+  OpenCV
+  visualization_msgs
 )
 
 #generate messages
