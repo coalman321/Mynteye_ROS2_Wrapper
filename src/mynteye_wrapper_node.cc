@@ -393,24 +393,22 @@ class MYNTEYEWrapper : public rclcpp::Node {
         mynteye->EnableProcessMode(ProcessMode::PROC_NONE);
 
         // Image publishers
-
-        image_transport::ImageTransport it_mynteye(this->shared_from_this());
         // left
-        pub_left_mono = it_mynteye.advertise(left_mono_topic, 1);
+        pub_left_mono = image_transport::create_publisher(this, left_mono_topic, rmw_qos_profile_sensor_data);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << left_mono_topic);
-        pub_left_color = it_mynteye.advertiseCamera(left_color_topic, 1);
+        pub_left_color = image_transport::create_camera_publisher(this, left_color_topic, rmw_qos_profile_sensor_data);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << left_color_topic);
         // right
-        pub_right_mono = it_mynteye.advertise(right_mono_topic, 1);
+        pub_right_mono = image_transport::create_publisher(this, right_mono_topic, rmw_qos_profile_sensor_data);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << right_mono_topic);
-        pub_right_color = it_mynteye.advertiseCamera(right_color_topic, 1);
+        pub_right_color = image_transport::create_camera_publisher(this, right_color_topic, rmw_qos_profile_sensor_data);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << right_color_topic);
         // depth
-        pub_depth = it_mynteye.advertiseCamera(depth_topic, 1);
+        pub_depth = image_transport::create_camera_publisher(this, depth_topic, rmw_qos_profile_sensor_data);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << depth_topic);
         // points
