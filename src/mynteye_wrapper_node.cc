@@ -394,21 +394,26 @@ class MYNTEYEWrapper : public rclcpp::Node {
 
         // Image publishers
         // left
-        pub_left_mono = image_transport::create_publisher(this, left_mono_topic, rmw_qos_profile_sensor_data);
+        pub_left_mono = image_transport::create_publisher(
+            this, left_mono_topic, rmw_qos_profile_sensor_data);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << left_mono_topic);
-        pub_left_color = image_transport::create_camera_publisher(this, left_color_topic, rmw_qos_profile_sensor_data);
+        pub_left_color = image_transport::create_camera_publisher(
+            this, left_color_topic, rmw_qos_profile_sensor_data);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << left_color_topic);
         // right
-        pub_right_mono = image_transport::create_publisher(this, right_mono_topic, rmw_qos_profile_sensor_data);
+        pub_right_mono = image_transport::create_publisher(
+            this, right_mono_topic, rmw_qos_profile_sensor_data);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << right_mono_topic);
-        pub_right_color = image_transport::create_camera_publisher(this, right_color_topic, rmw_qos_profile_sensor_data);
+        pub_right_color = image_transport::create_camera_publisher(
+            this, right_color_topic, rmw_qos_profile_sensor_data);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << right_color_topic);
         // depth
-        pub_depth = image_transport::create_camera_publisher(this, depth_topic, rmw_qos_profile_sensor_data);
+        pub_depth = image_transport::create_camera_publisher(
+            this, depth_topic, rmw_qos_profile_sensor_data);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << depth_topic);
         // points
@@ -417,16 +422,17 @@ class MYNTEYEWrapper : public rclcpp::Node {
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << points_topic);
         // imu
-        pub_imu = this->create_publisher<sensor_msgs::msg::Imu>(imu_topic, 100);
+        pub_imu = this->create_publisher<sensor_msgs::msg::Imu>(
+            imu_topic, rclcpp::SensorDataQoS());
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << imu_topic);
         pub_imu_processed = this->create_publisher<sensor_msgs::msg::Imu>(
-            imu_processed_topic, 100);  // NOLINT
+            imu_processed_topic, rclcpp::SensorDataQoS());  // NOLINT
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << imu_processed_topic);
         // temp
         pub_temp = this->create_publisher<sensor_msgs::msg::Temperature>(
-            temp_topic, 100);
+            temp_topic, rclcpp::SensorDataQoS());
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << temp_topic);
 
