@@ -70,7 +70,11 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'ir_depth_only',
             default_value='false',
-            description='USE only IR for calculating depth'),
+            description='Use only IR for calculating depth'),
+        DeclareLaunchArgument(
+            'default_qos',
+            default_value='True',
+            description='Use system default QOS profile. if false, sensor data QOS is used'),
         DeclareLaunchArgument(
             'points_frequency',
             default_value='10.0',

@@ -158,6 +158,10 @@ class MYNTEYEWrapper : public rclcpp::Node {
 
     rclcpp::TimerBase::SharedPtr pub_timer;
 
+    rclcpp::QoS systemQos = rclcpp::SensorDataQoS();
+
+
+
     MYNTEYEWrapper() : Node("mynteye_wrapper_d") {
         skip_tag = -1;
         skip_tmp_left_tag = 0;
@@ -181,6 +185,7 @@ class MYNTEYEWrapper : public rclcpp::Node {
         this->declare_parameter<bool>("state_ae", true);
         this->declare_parameter<bool>("state_awb", true);
         this->declare_parameter<bool>("ir_depth_only", true);
+        this->declare_parameter<bool>("default_qos", true);
 
         int dev_index = this->get_parameter("dev_index").get_value<int>();
         int framerate = this->get_parameter("framerate").get_value<int>();
@@ -199,6 +204,11 @@ class MYNTEYEWrapper : public rclcpp::Node {
         bool state_awb = this->get_parameter("state_awb").get_value<bool>();
         bool ir_depth_only =
             this->get_parameter("ir_depth_only").get_value<bool>();
+        
+        if(this->get_parameter("default_qos").get_value<bool>()){
+            systemQos = rclcpp::SystemDefaultsQoS();
+        }
+
 
         // transform parameters
         this->declare_parameter<double>("points_frequency",
@@ -395,44 +405,44 @@ class MYNTEYEWrapper : public rclcpp::Node {
         // Image publishers
         // left
         pub_left_mono = image_transport::create_publisher(
-            this, left_mono_topic, rmw_qos_profile_sensor_data);
+            this, left_mono_topic, systemQos.get_rmw_qos_profile());
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << left_mono_topic);
         pub_left_color = image_transport::create_camera_publisher(
-            this, left_color_topic, rmw_qos_profile_sensor_data);
+            this, left_color_topic, systemQos.get_rmw_qos_profile());
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << left_color_topic);
         // right
         pub_right_mono = image_transport::create_publisher(
-            this, right_mono_topic, rmw_qos_profile_sensor_data);
+            this, right_mono_topic, systemQos.get_rmw_qos_profile());
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << right_mono_topic);
         pub_right_color = image_transport::create_camera_publisher(
-            this, right_color_topic, rmw_qos_profile_sensor_data);
+            this, right_color_topic, systemQos.get_rmw_qos_profile());
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << right_color_topic);
         // depth
         pub_depth = image_transport::create_camera_publisher(
-            this, depth_topic, rmw_qos_profile_sensor_data);
+            this, depth_topic, systemQos.get_rmw_qos_profile());
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << depth_topic);
         // points
         pub_points = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-            points_topic, 1);
+            points_topic, systemQos);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << points_topic);
         // imu
         pub_imu = this->create_publisher<sensor_msgs::msg::Imu>(
-            imu_topic, rclcpp::SensorDataQoS());
+            imu_topic, systemQos);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << imu_topic);
         pub_imu_processed = this->create_publisher<sensor_msgs::msg::Imu>(
-            imu_processed_topic, rclcpp::SensorDataQoS());  // NOLINT
+            imu_processed_topic, systemQos);  // NOLINT
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << imu_processed_topic);
         // temp
         pub_temp = this->create_publisher<sensor_msgs::msg::Temperature>(
-            temp_topic, rclcpp::SensorDataQoS());
+            temp_topic, systemQos);
         RCLCPP_INFO_STREAM(this->get_logger(),
                            "Advertized on topic " << temp_topic);
 
