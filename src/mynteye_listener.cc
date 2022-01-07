@@ -23,7 +23,7 @@
 #include <sensor_msgs/msg/image.hpp>
 
 #define CONFIGURU_IMPLEMENTATION 1
-#include "configuru.hpp"
+#include "mynteye_wrapper_d/configuru.hpp"
 using namespace configuru;  // NOLINT
 
 namespace enc = sensor_msgs::image_encodings;

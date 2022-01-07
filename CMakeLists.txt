@@ -36,7 +36,6 @@ target_include_directories(mynteye_wrapper_d_node PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(mynteye_wrapper_d_node PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(mynteye_wrapper_d_node 
-  mynteyed
   sensor_msgs
   std_msgs
   tf2
@@ -47,6 +46,7 @@ ament_target_dependencies(mynteye_wrapper_d_node
   OpenCV
   visualization_msgs
 )
+target_link_libraries(mynteye_wrapper_d_node mynteye_depth)
 
 add_executable(mynteye_listener_d src/mynteye_listener.cc)
 target_include_directories(mynteye_listener_d PUBLIC
@@ -54,7 +54,6 @@ target_include_directories(mynteye_listener_d PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(mynteye_listener_d PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(mynteye_listener_d 
-  mynteyed
   sensor_msgs
   std_msgs
   tf2

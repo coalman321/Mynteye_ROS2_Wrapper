@@ -42,8 +42,6 @@
 #include "mynteye_wrapper_d/configuru.hpp"
 using namespace configuru;
 
-#define WITH_OPENCV
-
 namespace mynteyed {
 
 namespace {
