@@ -11,29 +11,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+#include <rclcpp/rclcpp.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.hpp>
+
 #include <mynteyed/camera.h>
 #include <mynteyed/utils.h>
+
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/static_transform_broadcaster.h>
-#include <unistd.h>
 
+#include <unistd.h>
 #include <chrono>
-#include <image_transport/image_transport.hpp>
 #include <iomanip>
 #include <memory>
-#include <mynteye_wrapper_d/srv/get_params.hpp>
+#include <string>
+#include <vector>
+#include <iostream>
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/opencv.hpp>
-#include <rclcpp/rclcpp.hpp>
+
+#include <mynteye_wrapper_d/srv/get_params.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/temperature.hpp>
-#include <string>
-#include <vector>
 #include <visualization_msgs/msg/marker.hpp>
 
 #include "mynteye_wrapper_d/pointcloud_generator.hpp"
