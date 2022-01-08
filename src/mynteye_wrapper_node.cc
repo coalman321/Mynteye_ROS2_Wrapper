@@ -465,12 +465,12 @@ class MYNTEYEWrapper : public rclcpp::Node {
 
     void detectSubscribers() {
         //something is wrong with image transport, causing the getNumSubscribers to not update properly
-        bool left_mono_sub = true;//pub_left_mono.getNumSubscribers() > 0;
-        bool left_color_sub = true;// pub_left_color.getNumSubscribers() > 0;
-        bool right_mono_sub = true;//pub_right_mono.getNumSubscribers() > 0;
-        bool right_color_sub = true;//pub_right_color.getNumSubscribers() > 0;
-        bool depth_sub = true;//pub_depth.getNumSubscribers() > 0;
-        bool points_sub = true;//pub_points->get_subscription_count() > 0;
+        bool left_mono_sub = this->count_subscribers(pub_left_mono.getTopic()) > 0;
+        bool left_color_sub = this->count_subscribers(pub_left_color.getTopic());// .getNumSubscribers() > 0;
+        bool right_mono_sub = this->count_subscribers(pub_right_mono.getTopic());//.getNumSubscribers() > 0;
+        bool right_color_sub = this->count_subscribers(pub_right_color.getTopic());//.getNumSubscribers() > 0;
+        bool depth_sub = this->count_subscribers(pub_depth.getTopic());//.getNumSubscribers() > 0;
+        bool points_sub = pub_points->get_subscription_count() > 0;
         bool imu_sub = pub_imu->get_subscription_count() > 0;
         bool temp_sub = pub_temp->get_subscription_count() > 0;
         bool imu_processed_sub =
