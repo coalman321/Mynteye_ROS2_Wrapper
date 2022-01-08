@@ -454,16 +454,6 @@ class MYNTEYEWrapper : public rclcpp::Node {
         detectSubscribers();
         // open device
         openDevice();
-
-        // loop
-        pub_timer = this->create_wall_timer(
-            std::chrono::milliseconds((int)(1000.0 / framerate)),
-            std::bind(&MYNTEYEWrapper::timerCallback, this));
-    }
-
-    void timerCallback() {
-        publishMesh();
-        detectSubscribers();
     }
 
     ~MYNTEYEWrapper() {
@@ -474,21 +464,26 @@ class MYNTEYEWrapper : public rclcpp::Node {
     }
 
     void detectSubscribers() {
-        bool left_mono_sub = pub_left_mono.getNumSubscribers() > 0;
-        bool left_color_sub = pub_left_color.getNumSubscribers() > 0;
-        bool right_mono_sub = pub_right_mono.getNumSubscribers() > 0;
-        bool right_color_sub = pub_right_color.getNumSubscribers() > 0;
-        bool depth_sub = pub_depth.getNumSubscribers() > 0;
-        bool points_sub = pub_points->get_subscription_count() > 0;
+        //something is wrong with image transport, causing the getNumSubscribers to not update properly
+        bool left_mono_sub = true;//pub_left_mono.getNumSubscribers() > 0;
+        bool left_color_sub = true;// pub_left_color.getNumSubscribers() > 0;
+        bool right_mono_sub = true;//pub_right_mono.getNumSubscribers() > 0;
+        bool right_color_sub = true;//pub_right_color.getNumSubscribers() > 0;
+        bool depth_sub = true;//pub_depth.getNumSubscribers() > 0;
+        bool points_sub = true;//pub_points->get_subscription_count() > 0;
         bool imu_sub = pub_imu->get_subscription_count() > 0;
         bool temp_sub = pub_temp->get_subscription_count() > 0;
         bool imu_processed_sub =
             pub_imu_processed->get_subscription_count() > 0;
 
+        std::cout << "rechecked subs: [" << pub_left_mono.getNumSubscribers() << "|" 
+            << pub_left_color.getNumSubscribers() << "|" << pub_right_color.getNumSubscribers() 
+            << "|" << pub_right_color.getNumSubscribers()  << "|" << pub_depth.getNumSubscribers() << "]" << std::endl;
+
         bool left_sub = left_mono_sub || left_color_sub;
         bool right_sub = right_mono_sub || right_color_sub;
 
-        pthread_mutex_lock(&mutex_sub_result);
+        //pthread_mutex_lock(&mutex_sub_result);
         if (left_sub != sub_result.left || right_sub != sub_result.right ||
             depth_sub != sub_result.depth || points_sub != sub_result.points) {
             if (left_sub || right_sub || depth_sub || points_sub) {
@@ -516,7 +511,7 @@ class MYNTEYEWrapper : public rclcpp::Node {
             depth_sub,         points_sub,     imu_sub,        temp_sub,
             imu_processed_sub, left_sub,       right_sub,
         };
-        pthread_mutex_unlock(&mutex_sub_result);
+        //pthread_mutex_unlock(&mutex_sub_result);
     }
 
     rclcpp::Time compatibleTimestamp(const int& frame_id) {
@@ -542,7 +537,9 @@ class MYNTEYEWrapper : public rclcpp::Node {
         };
         for (auto&& type : types) {
             mynteye->SetStreamCallback(type, [this](const StreamData& data) {
-                pthread_mutex_lock(&mutex_sub_result);
+                std::cout << "got next frame from camera" << std::endl;
+                this->detectSubscribers();
+                //pthread_mutex_lock(&mutex_sub_result);
                 bool sub_result_left = sub_result.left;
                 bool sub_result_points = sub_result.points;
                 bool sub_result_left_color = sub_result.left_color;
@@ -551,7 +548,7 @@ class MYNTEYEWrapper : public rclcpp::Node {
                 bool sub_result_right_color = sub_result.right_color;
                 bool sub_result_right_mono = sub_result.right_mono;
                 bool sub_result_right_depth = sub_result.depth;
-                pthread_mutex_unlock(&mutex_sub_result);
+                //pthread_mutex_unlock(&mutex_sub_result);
 
                 auto timestamp =
                     data.img_info ? checkUpTimeStamp(data.img_info->timestamp,
@@ -577,6 +574,10 @@ class MYNTEYEWrapper : public rclcpp::Node {
                             publishDepth(data, timestamp);
                         }
                     } break;
+                }
+
+                if(!rclcpp::ok()){
+                    closeDevice();
                 }
             });
         }
@@ -636,7 +637,7 @@ class MYNTEYEWrapper : public rclcpp::Node {
         bool in_ok;
         auto&& in = mynteye->GetStreamIntrinsics(params.stream_mode, &in_ok);
         if (in_ok) {
-            RCLCPP_ERROR(this->get_logger(), "Camera info is created");
+            RCLCPP_INFO(this->get_logger(), "Camera info is created");
         } else {
             RCLCPP_ERROR(this->get_logger(),
                          "Camera info is null, use default parameters.");
@@ -667,6 +668,7 @@ class MYNTEYEWrapper : public rclcpp::Node {
                 pub_points->publish(msg);
             },
             this, points_factor, points_frequency));
+        RCLCPP_INFO(this->get_logger(), "Connected to camera successfully");
     }
 
     void closeDevice() {
@@ -713,6 +715,8 @@ class MYNTEYEWrapper : public rclcpp::Node {
                       const std::string mono_frame_id, bool is_left) {
         auto&& mat = data.img->To(ImageFormat::COLOR_BGR)->ToMat();
 
+        std::cout << "publishing color image" << std::endl;
+
         if (color_sub) {
             std_msgs::msg::Header header;
             header.stamp = timestamp;
@@ -751,6 +755,8 @@ class MYNTEYEWrapper : public rclcpp::Node {
         std_msgs::msg::Header header;
         header.stamp = timestamp;
         header.frame_id = depth_frame_id;
+
+        std::cout << "publishing depth" << std::endl;
 
         auto&& info = depth_info_ptr;
         if (info)
@@ -1213,6 +1219,7 @@ class MYNTEYEWrapper : public rclcpp::Node {
         mynteye_wrapper_d::srv::GetParams::Response::SharedPtr res) {  // NOLINT
         using Request = mynteye_wrapper_d::srv::GetParams::Request;
         bool in_ok_1, in_ok_2;
+        std::cout << "get params called" << std::endl;
         // left_info_ptr
         // right_info_ptr
         switch (req->key) {
