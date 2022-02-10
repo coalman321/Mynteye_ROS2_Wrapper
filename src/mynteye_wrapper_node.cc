@@ -326,7 +326,12 @@ class MYNTEYEWrapper : public rclcpp::Node {
         {
             dev_infos = mynteye->GetDeviceInfos();
             size_t n = dev_infos.size();
-            if (n <= 0 || dev_index < 0 || dev_index >= n) {
+            if(n <= 0){
+                RCLCPP_ERROR(this->get_logger(), "No devices found");
+                return;
+            }
+
+            if (dev_index < 0 || dev_index >= n) {
                 RCLCPP_ERROR_STREAM(this->get_logger(),
                                     "Device not found, index: " << dev_index);
                 return;
